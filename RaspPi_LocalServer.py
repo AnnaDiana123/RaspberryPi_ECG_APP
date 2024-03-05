@@ -9,16 +9,19 @@ import logging
 app = Flask(__name__)
 
 # Circular buffer for EKG data
-ekg_data_buffer = collections.deque(maxlen=7500)
+ekg_data_buffer = collections.deque(maxlen=1000)
 
 # Flask route to receive data
 @app.route('/post-data', methods=['POST'])
 def post_data():
     try:
         data = request.json
+        startReadingTime=data.get('startReadingTime')
+        eqID=data.get('eqID')
         ekg_data = data.get('ekgData', [])
         for value in ekg_data:
             ekg_data_buffer.append(value)  # Append new data to the buffer
+        print(f"time= {startReadingTime} eqID={eqID}")
         return jsonify({"message": "Data received successfully"}), 200
     except Exception as e:
         logging.exception(e)
@@ -28,6 +31,7 @@ def post_data():
 # Function to run the Flask app in a separate thread
 def run_flask_app():
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    
 
 # Initialize the plot
 plt.ion()  # Turn on interactive mode
