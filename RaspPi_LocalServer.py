@@ -7,6 +7,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import numpy as np
 from scipy.signal import find_peaks
+import threading
 
 
 # Flask setup
@@ -23,6 +24,9 @@ db = firestore.client()
 # Local table for deviceId to userId mapping
 device_user_table = {}
 
+# Initialize a lock, returns an instance of the Lock class
+device_user_table_lock = threading.Lock();
+
 def update_device_user_table():
     # Update the local table with deviceId to userId mappings from Firestore.
     
@@ -34,16 +38,21 @@ def update_device_user_table():
     #Modify the global variable device_user_table
     global device_user_table
     new_table = {doc.to_dict().get('DeviceId'): doc.id for doc in docs} # Create new mapping table deviceId : userId
-    device_user_table = new_table # Assign new table to global table
+    
+    # Use the lock so that the table update is thread-safe
+    with device_user_table_lock:
+        device_user_table = new_table # Assign new table to global table
     
 def get_user_id_by_device_id(device_id):
-    #Retrieve userId from the local cache using deviceId. Update cache if necessary.
+    # Retrieve userId from the local cache using deviceId. Update cache if necessary.
     
-    if device_id not in device_user_table:
-        # Update the cache if deviceId is not found, indicating a potential new registration
-        update_device_user_table()
+    # Ensure thread-safe read of device_user tableth lock
+    with device_user_table_lock:
+        if device_id not in device_user_table:
+            # Update the cache if deviceId is not found, indicating a potential new registration
+            update_device_user_table()
 
-    return device_user_table.get(device_id) #return userId or None
+    return device_user_table.get(device_id) # Return userId or None
     
     
 def generate_dictionary_ecg_value_timestamp(initial_timestamp, ecg_values, sampling_interval):
@@ -137,7 +146,7 @@ def post_data():
 
         
 # Background thread for periodic cache updates
-def start_table_update_thread(interval=3600 * 24): // update once a day
+def start_table_update_thread(interval=3600 * 24): # update once a day
     #Start a background thread that updates the cache 
     
     def update():
