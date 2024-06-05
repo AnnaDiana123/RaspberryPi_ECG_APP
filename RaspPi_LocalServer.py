@@ -26,12 +26,15 @@ device_user_table = {}
 def update_device_user_table():
     # Update the local table with deviceId to userId mappings from Firestore.
     
+    # Reference to UserAuthList collection
     users_ref = db.collection('UserAuthList')
+    # Get all documents in the collection
     docs = users_ref.stream()
     
+    #Modify the global variable device_user_table
     global device_user_table
-    new_table = {doc.to_dict().get('DeviceId'): doc.id for doc in docs}
-    device_user_table = new_table
+    new_table = {doc.to_dict().get('DeviceId'): doc.id for doc in docs} # Create new mapping table deviceId : userId
+    device_user_table = new_table # Assign new table to global table
     
 def get_user_id_by_device_id(device_id):
     #Retrieve userId from the local cache using deviceId. Update cache if necessary.
@@ -40,10 +43,11 @@ def get_user_id_by_device_id(device_id):
         # Update the cache if deviceId is not found, indicating a potential new registration
         update_device_user_table()
 
-    return device_user_table.get(device_id)
+    return device_user_table.get(device_id) #return userId or None
     
     
 def generate_dictionary_ecg_value_timestamp(initial_timestamp, ecg_values, sampling_interval):
+    # Generate dictionary of ECG values with their coresponding times, the sampling interval is 10 ms, so ecgValue1 will have initial_timestamp, ecg_value2 - initial_timestamp+10, ecg_value3 - initial timestamp + 20 
     
     # Initialize dictionary of the form {ecg_value, timestamp}
     ecg_data = [ {"ecg_value": value, "timestamp": int(initial_timestamp) + i* sampling_interval} for i,value in enumerate(ecg_values)]
@@ -81,6 +85,8 @@ def compute_health_parameters(ecg_values):
     
     
 def upload_data(initial_timestamp,eq_id,ecg_values):
+    # Up[load ecg data and computed health parameters to Firestore
+    
     # Use cache to get userId
     user_id = get_user_id_by_device_id(eq_id)
         
@@ -93,7 +99,6 @@ def upload_data(initial_timestamp,eq_id,ecg_values):
         
         # Get health parameters
         rr_intervals, bpm, sdnn, rmssd = compute_health_parameters(ecg_values)
-
 
         # Firestore data upload
         try:
@@ -113,35 +118,41 @@ def upload_data(initial_timestamp,eq_id,ecg_values):
 
 @app.route('/post-data', methods=['POST'])
 def post_data():
+    # Handle post request to receive and process ECG data
+    
     try:
-        data = request.json
+        data = request.json #Get json data from request
+        #Extract parameters
         initial_timestamp = data.get('initialTimestamp')  
-        eq_id = data.get('eqID')
+        eq_id = data.get('eqID') 
         ecg_values = data.get('ecgValues', [])
         
+        # upload data to firestore
         upload_data(initial_timestamp,eq_id,ecg_values)
         
-        return jsonify({"message": "Data received successfully"}), 200
+        return jsonify({"message": "Data received successfully"}), 200 # Return success code
     except Exception as e:
         logging.exception("Error: %s", e)
-        return jsonify({"error": "Server error"}), 500
+        return jsonify({"error": "Server error"}), 500 #Return error
 
         
 # Background thread for periodic cache updates
-def start_table_update_thread(interval=3600 * 60 *2):
+def start_table_update_thread(interval=3600 * 24): // update once a day
     #Start a background thread that updates the cache 
-    def update():
-        while True:
-            update_device_user_table()
-            time.sleep(interval)
     
-    thread = threading.Thread(target=update)
-    thread.daemon = True  # Daemon threads are abruptly stopped at program termination.
-    thread.start()
+    def update():
+        while True: # Infinite loop
+            update_device_user_table() # Update table
+            time.sleep(interval) # Wait for interval
+    
+    thread = threading.Thread(target=update) # Create a background thread to run the update functionality
+    thread.daemon = True  # Daemon threads as daemon, stops at the end of the program
+    thread.start() # Start the thread
 
 if __name__ == '__main__':
-    # Initial cache update
+    # Initial update of the device id
     update_device_user_table()
-    # Start the periodic cache update thread
+    # Start the periodic update thread
     start_table_update_thread()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True) # Run the flask app on all available IP adresses on port 5000
+
