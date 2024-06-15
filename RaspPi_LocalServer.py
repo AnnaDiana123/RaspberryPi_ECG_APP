@@ -10,6 +10,7 @@ import json
 import os
 
 
+
 # Flask setup
 app = Flask(__name__)
 
@@ -99,11 +100,15 @@ def compute_health_parameters(ecg_values):
     bpm = int (60000/average_rr_interval)
     
     # Compute SDNN (standard deviation of RR intervals)
+    
     sdnn = np.std(rr_intervals)
     
     # Compute RMSSD (root mean square of successive fifferences between consecutive heartbeats)
+    # Compute diffs of the RR intervals
+    rr_diffs = np.diff(rr_intervals)
+    
     # Square the differences between peaks
-    squared_diffs = rr_intervals
+    squared_diffs = np.square(rr_diffs)
     
     # Compute the mean
     mean_squared_diffs = np.mean(squared_diffs)
@@ -123,7 +128,7 @@ def upload_data(initial_timestamp,eq_id,ecg_values):
     if not user_id:
         error_message = f"Eq id {eq_id} is not recogognized!"
         print(error_message)
-        write_to_error_file(error_message, initial_timestamp, eq_id, ecg_values)
+        write_to_error_file(error_message,eq_id, initial_timestamp, ecg_values)
     elif -1 in ecg_values:
         error_message = "Lead off detected! Data will not be forwarded to cloud"
         print(error_message)
