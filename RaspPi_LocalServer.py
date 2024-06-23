@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify
-import threading
 import collections
 import time
+import threading
 import firebase_admin
 from firebase_admin import credentials, firestore
 import numpy as np
 from scipy.signal import find_peaks
 import json
-import os
+
 
 
 
@@ -25,9 +25,6 @@ db = firestore.client()
 # Local table for deviceId to userId mapping
 device_user_table = {}
 
-# Initialize a lock, returns an instance of the Lock class
-device_user_table_lock = threading.Lock();
-file_lock = threading.Lock();
 
 ERROR_FILE = "local_storage_errors.json"
 
@@ -41,14 +38,13 @@ def write_to_error_file(error_message, eq_id, initial_timestamp, ecg_values):
         "ecg_values" : ecg_values
     }
     
-    # Use lock to write safely
-    with file_lock:
-        # Open file in append mode
-        file = open(ERROR_FILE, "a")
-        try:
-            file.write(json.dumps(json_entry) + "\n") # Write to file
-        finally:
-            file.close() # Close the file
+
+    # Open file in append mode
+    file = open(ERROR_FILE, "a")
+    try:
+        file.write(json.dumps(json_entry) + "\n") # Write to file
+    finally:
+        file.close() # Close the file
     
         
 def update_device_user_table():
@@ -63,9 +59,7 @@ def update_device_user_table():
     global device_user_table
     new_table = {doc.to_dict().get("DeviceId"): doc.id for doc in docs} # Create new mapping table deviceId : userId
     
-    # Use the lock so that the table update is thread-safe
-    with device_user_table_lock:
-        device_user_table = new_table # Assign new table to global table
+    device_user_table = new_table # Assign new table to global table
     
 def get_user_id_by_device_id(device_id):
     # Retrieve userId from the local cache using deviceId. Update cache if necessary.
@@ -200,4 +194,3 @@ if __name__ == "__main__":
     # Start the periodic update thread
     start_table_update_thread()
     app.run(host="0.0.0.0", port=5000, debug=True) # Run the flask app on all available IP adresses on port 5000
-
